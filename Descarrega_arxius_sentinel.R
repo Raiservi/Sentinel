@@ -5,53 +5,93 @@ library(jsonlite)
 library(dplyr)
 library(xml2)
 library(raster)
+library(terra)
 library(sf)
 library(sp)
 
-########    Filter and Submit the Query ##########
+########    Filtrar i enviar la consulta per obtindre llistat de productes del cataleg ##########
 
-#Define the base URL for the Copernicus Data Space API
+#Definim la URL base de la consulta del cataleg
 url_dataspace <- "https://catalogue.dataspace.copernicus.eu/odata/v1"
 
-# Define filtering parameters
-satellite <- "SENTINEL-2"
-level <- "S2MSI2A"
-cloud_cover_max <- 10
+# Definim els parametres del filtre
 
-# Define Area of Interest (AOI) in point or polygon formats
+satellite <- "SENTINEL-2" # Seleccionem el satelit
+
+level <- "S2MSI2A" # Seleccionem el sentinel -2 amb dades tractades
+
+cloud_cover_max <- 10 # Cobertura de nuvols
+
+# Podem definir l area dinteres  (AOI)  o un punt en l area d interes
+
+# En el cas d un punt unicament posarem longitut-espai-latitut
+
 aoi_point <- "POINT(2.741089 41.630515)"
-# Per el poligon latitud_espai_longitut,coma, espai, latitud.... cal repetir al final el primer punt
+
+# Per el poligon latitud_espai_longitut,coma, espai, latitud.... cal repetir al final el primer punt per tancar el poligon!!!
+
 aoi_polygon <-"POLYGON ((2.18914 41.378988, 2.18914 41.406401, 2.223129 41.406401, 2.223129 41.378988, 2.18914 41.378988))"
 
+#definim les dates de la consulta
+
 start_date <- "2024-08-08"
+
 end_date <- "2024-08-10"
+
+# Cal definir també les hores en aquet format
+
 start_date_full <- paste0(start_date, "T00:00:00.000Z")
+
 end_date_full <- paste0(end_date, "T00:00:00.000Z")
 
+#Juntem en un link tots els parametres de filtratge
+
 query <- paste0(url_dataspace, "/Products?$filter=Collection/Name%20eq%20'", satellite, "'%20and%20Attributes/OData.CSC.StringAttribute/any(att:att/Name%20eq%20'productType'%20and%20att/OData.CSC.StringAttribute/Value%20eq%20'", level, "')%20and%20OData.CSC.Intersects(area=geography'SRID=4326;", URLencode(aoi_polygon), "')%20and%20ContentDate/Start%20gt%20", start_date_full, "%20and%20ContentDate/Start%20lt%20", end_date_full)
+
+#Pasem la consulta a traves de l API amb GET i obtenim resposta
+
 response <- GET(query)
 
-# Extract and process the JSON response
+# Extraccio i procesament del JSON de la resposta
+
 response_content <- content(response, "text", encoding = "UTF-8")
+
 response_json <- fromJSON(response_content)
+
+#El json el pasem a dataframe
+
 result <- as.data.frame(response_json$value)
 
-# Filter records where 'Online' column is TRUE
+# Filtrem els productes nomes disponibles online , es a dir columna 'Online' es TRUE
+
 result <- filter(result, Online == TRUE)
 
-# Display the first 10 results
+# Podem mostrar nomes els deu primer resultats
+
 head(result, 10)
 
-#########    Create acces token    ########
+#Podem visualtitzar el dataframe
 
-# Authentication for accessing secured resources
+view(result)
+
+###############################################################################
+
+#Per descarregar les imatges cal autentificar-se, per tant primer creare token d
+#d acces
+
+#########    Crear token d acces     ########
+
+# PEr autentificarse cal tindre un conte amb usuari i contrasenya ja creats amb antelacio
+
 username = "ramonservitje@gmail.com"
 password = "P4t4t4252525#"
 
-# Define authentication server URL
+# L URL d autentificacio del serveis
+
 auth_server_url <- "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
 
-# Prepare authentication data
+# Preparem les dades necesaries en una llista per l autenttificacio
+
 data <- list(
   "client_id" = "cdse-public",
   "grant_type" = "password",
@@ -59,17 +99,25 @@ data <- list(
   "password" = password
 )
 
+# Enviem la consulta al servidor i obtenim resposta
+
 response <- POST(auth_server_url, body = data, encode = "form", verify = TRUE)
+
+#Modifiquem la resposta per convertir-la en el token d autentificacio
+
 access_token <- fromJSON(content(response, "text", encoding = "UTF-8"))$access_token
 
 
 ########## Download the metadata file (.xml)   ################
 
 # Set the Authorization header using obtained access token
+
 headers <- add_headers(Authorization = paste("Bearer", access_token))
 
 # Extract product information for the third product in the list
+
 product_row_id <- 1 # The third images in the list (Nov 5th, 2023)
+
 product_id <- result[product_row_id, "Id"]
 product_name <- result[product_row_id, "Name"]
 
@@ -136,7 +184,9 @@ for (band_node in band_path) {
   writeBin(content(file, "raw"), outfile)
   cat("Saved:", band_node[6], "\n")
 }
-#######   Read the “jp2” files, Stack, and Clip to AOI  ########
+
+
+######## Llegint els arxius “jp2” descarregats, tractant-los i visualitzant-los  ########
 
 # Set the folder path
 folder_path <- getwd()
@@ -152,7 +202,8 @@ blue_band  <- jp2_files[grep("_B02_", jp2_files)]
 green_band <- jp2_files[grep("_B03_", jp2_files)]
 red_band   <- jp2_files[grep("_B04_", jp2_files)]
 
-# List the specific raster files
+# Creem una llista amb els rasters que ens interesen.
+
 file_list <- c(blue_band, green_band, red_band)
 
 # Define the AOI polygon
