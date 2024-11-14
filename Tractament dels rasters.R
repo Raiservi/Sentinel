@@ -35,11 +35,16 @@ file_list <- c(blue_band, green_band, red_band, nir_band)
 
 # Definim l area geografica   d interes dins de la propia imatge de la descarrega per retallar-la
 
-aol_polygon <-  "POLYGON ((2.189144 41.406401,2.223129 41.406401,2.223129 41.378988,2.18914 41.378988, 2.189144 41.406401))"
+aol_polygon <-
+
+  x<-c(2.189144 ,2.223129 ,2.223129,2.18914 , 2.189144 )
+  y<- c(41.406401, 41.406401, 41.378988, 41.378988, 41.406401)
+  points<- cbind(x,y)
+ #aoi<- polygon(points)
 
 # Convertim el poligon AOI polygon a un objecte sf
 
-aoi <- st_as_sfc(aol_polygon)
+aoi <- vect(points, type="polygons",crs = "WGS84")
 
 #aoi <- st_read(aoi)
 
@@ -50,6 +55,7 @@ aoi <- st_set_crs(aoi, 4326)
 # Llegim el primer raster per saber la seva projeccio
 
 raster_file <- raster(file.path(file_list[1]))
+
 raster_projection <- projection(raster_file)
 
 #Reprojectem el poligon d area d interes (aoi) amb la projeccio del raster
